@@ -1,0 +1,121 @@
+---
+title: "Practical Machine Learning Project"
+subtitle: "Prediction Assignment Writeup"
+author: "Rother Jay B. Copino"
+date: "December 8, 2018"
+output:
+  html_document:
+    df_print: paged
+    keep_md: yes
+---
+___
+### Introduction
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+### Background of the Project
+Using devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit* it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify *how well they do it*. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+### The Data
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+
+
+### Solution
+
+##### Load the needed Libraries
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+```
+
+##### Set Seed for Reproducibility of the Sample Run
+```{r}
+set.seed(1234)
+```
+
+##### Download and Load the Training and Testing Data
+**Training Data**
+```{r}
+trainingUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+training <- read.csv(url(trainingUrl), na.strings=c("NA"))
+head(training)
+dim(training)
+```
+**Test Data**
+```{r}
+testingURL <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testing <- read.csv(url(testingURL), na.strings=c("NA"))
+head(testing)
+dim(testing)
+```
+Upon looking at the data this shows that there are some columns contains **NA**. Tidying up must be done.
+
+##### Cleaning Up the Data
+```{r}
+listOfColumnsWithNA <- sapply(1:dim(training)[2],function(x)sum(is.na(training[,x])))
+listOfColumnsWithNA <- which(listOfColumnsWithNA > 0)
+colnames(training[,c(1:7)])
+```
+
+After getting the list of columns containing **NA** values. We need to tranform our dataset and remove the columns specified in the list.
+
+##### Partition the training data to training and testing data
+```{r}
+toBeTrainined <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+subTraining <- training[toBeTrainined, ]
+subTesting <- training[-toBeTrainined, ]
+dim(subTraining)
+subTraining <- subTraining[, -c(1:7)]
+```
+
+```{r}
+nearZeroVariance <- nearZeroVar(subTraining, saveMetrics = TRUE)
+subTraining <- subTraining[, nearZeroVariance$nzv == FALSE]
+
+subTrainingDateCleansed <- subTraining
+for (i in 1:length(subTraining)){
+    if(sum(is.na(subTraining[, i]))/ nrow(subTraining) >= .6) {
+        for (j in 1:length(subTrainingDateCleansed)){
+            if(length(grep(names(subTraining[i]), names(subTrainingDateCleansed)[j])) == 1){
+                subTrainingDateCleansed <- subTrainingDateCleansed[, -j]
+            }
+        }
+    }
+}
+
+subTraining <- subTrainingDateCleansed
+```
+
+### Creating the Model with Random Forests
+```{r}
+model <- randomForest(classe ~., data = subTraining)
+predict <- predict(model, subTesting)
+confusionMatrix <- confusionMatrix(predict, subTesting$classe)
+print(confusionMatrix)
+```
+
+Now that we have a model created, we will now use the test date to test the model's accuracy.
+
+```{r}
+testPrediction <- predict(model, testing, type = "class")
+print(testPrediction)
+```
+
+### Conclusion
+The accuracy of the random forest model resulted to 99%, which depicts that it must have a 1% out of sample error.
+
+```{r}
+plot(model)
+```
+
+From the graph, it showed that it has 14% error rate for the 500 forests or treess, which is still relatively low. and the model still predicted the 20 samples correctly.
+
